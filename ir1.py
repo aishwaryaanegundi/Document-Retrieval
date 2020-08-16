@@ -4,6 +4,8 @@ import collections
 import nltk
 import string
 import math
+import operator
+
 corpus = {}
 with open('trec_documents.xml', 'r') as f:   # Reading file
     xml = f.read()
@@ -62,6 +64,75 @@ for word in vocabulary:
 for word in vocabulary:
     idf[word] = math.log(N/doc_count[word])
 
+# computing term frequencies
+term_frequencies = {}
+for docno, text in processed_corpus.items():
+    tf = {}
+    freq_count = {}
+    words = []
+    for word in text:
+        if word not in words:
+            words.append(word)
+            freq_count[word] = 1
+        else:
+            freq_count[word] += 1
+    max_frequency_key = max(freq_count, key=lambda key: freq_count[key])
+    max_frequency = freq_count[max_frequency_key]
+    for word in words:
+        tf[word] = freq_count[word]/max_frequency
+    term_frequencies[docno] = tf
 
-print(list(idf.items())[:100])
+
+
+    
+        
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        
+        
         
