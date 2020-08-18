@@ -5,6 +5,7 @@ import nltk
 import string
 import math
 import operator
+import numpy as np
 
 corpus = {}
 with open('trec_documents.xml', 'r') as f:   # Reading file
@@ -82,10 +83,66 @@ for docno, text in processed_corpus.items():
         tf[word] = freq_count[word]/max_frequency
     term_frequencies[docno] = tf
 
+# computing tf-idf scores
+tf_idf = {}
+for docno, text in processed_corpus.items():
+    tfidf = {}
+    words = []
+    for word in text:
+        if word not in words:
+            words.append(word)
+            tf = (term_frequencies[docno])[word]
+            tfidf[word] = tf * idf[word]
+    tf_idf[docno] = tfidf
 
+# computing cosine similarity
+def cosine_similarity(doc, query):
+    cos_sim = np.dot(doc, query)/(np.linalg.norm(doc)*np.linalg.norm(query))
+    return cos_sim
 
-    
+# construct an indexed vocabulary
+indexed_vocabulary = {}
+i = 0
+for word in vocabulary:
+    indexed_vocabulary[word] = i
+    i = i + 1
+
+# vectroizing documents
+def vectorize_doc(docno):
+    tokens = processed_corpus[docno]
+    vector = np.zeros([1,len(vocabulary)])
+    for token in tokens:
+        index = indexed_vocabulary[token]
+        tfidf = tf_idf[docno][token]
+        vector[index] = tfidf
+    return vector
+
+# vectorize query
+def vectorize_query(tokens):
+    tf = {}
+    freq_count = {}
+    words = []
+    for word in text:
+        if word not in words:
+            words.append(word)
+            freq_count[word] = 1
+        else:
+            freq_count[word] += 1
+    max_frequency_key = max(freq_count, key=lambda key: freq_count[key])
+    max_frequency = freq_count[max_frequency_key]
+    for word in words:
+        tf[word] = freq_count[word]/max_frequency
+    vector = np.zeros([1,len(vocabulary)])
+    for token in tokens:
+        index = indexed_vocabulary[token]
+        tfidf = tf[token]*idf[token]
+        vector[index] = tfidf
+    return vector
         
+    
+
+
+
 
 
 
