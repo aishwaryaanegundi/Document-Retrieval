@@ -6,6 +6,7 @@ import string
 import math
 import operator
 import numpy as np
+import collections
 
 corpus = {}
 with open('trec_documents.xml', 'r') as f:   # Reading file
@@ -50,7 +51,7 @@ for key, value in processed_corpus.items():
     for term in value:
         if term not in vocabulary:
             vocabulary.append(term)
-
+print("size of vocabulary: ", len(vocabulary))
 for word in vocabulary:
     idf[word] = 0
 
@@ -110,34 +111,69 @@ for word in vocabulary:
 # vectroizing documents
 def vectorize_doc(docno):
     tokens = processed_corpus[docno]
-    vector = np.zeros([1,len(vocabulary)])
+    vector = np.zeros(len(vocabulary))
     for token in tokens:
         index = indexed_vocabulary[token]
         tfidf = tf_idf[docno][token]
         vector[index] = tfidf
+#    print(np.nonzero(vector))
     return vector
 
 # vectorize query
 def vectorize_query(tokens):
-    tf = {}
-    freq_count = {}
-    words = []
-    for word in text:
-        if word not in words:
-            words.append(word)
-            freq_count[word] = 1
+    qtf = {}
+    counts = {}
+    query_words = []
+    for word in tokens:
+        if word not in query_words:
+            query_words.append(word)
+            counts[word] = 1
         else:
-            freq_count[word] += 1
-    max_frequency_key = max(freq_count, key=lambda key: freq_count[key])
-    max_frequency = freq_count[max_frequency_key]
-    for word in words:
-        tf[word] = freq_count[word]/max_frequency
-    vector = np.zeros([1,len(vocabulary)])
+            counts[word] += 1
+
+    max_frequency_key = max(counts, key=lambda key: counts[key])
+    max_frequency = counts[max_frequency_key]
+    for word in query_words:
+        qtf[word] = counts[word]/max_frequency
+    vector = np.zeros(len(vocabulary))
     for token in tokens:
-        index = indexed_vocabulary[token]
-        tfidf = tf[token]*idf[token]
-        vector[index] = tfidf
+        try:
+            index = indexed_vocabulary[token]
+            tfidf = qtf[token]*idf[token]
+            vector[index] = tfidf
+        except KeyError:
+            print("token: ", token, " not found")
     return vector
+
+# compute similarity scores
+query = "Who is the author of the book, The Iron Lady: A Biography of Margaret Thatcher?"
+query = str.lower(query)
+table = str.maketrans('', '', string.punctuation)
+query = query.translate(table)
+
+query_tokens = nltk.word_tokenize(query)
+
+query_vector = vectorize_query(query_tokens)
+similarity_scores = {}
+for docno, text in processed_corpus.items():
+    doc_vector = vectorize_doc(docno)
+    score = cosine_similarity(doc_vector, query_vector)
+    similarity_scores[docno] = score
+
+sorted_scores = sorted(similarity_scores.items(), key=lambda kv: kv[1])
+sorted_similarity_scores = collections.OrderedDict(sorted_scores)
+
+# return the top 50 relevant documents
+ranked_documents = {}
+i = 0
+for docno, score in reversed(sorted_similarity_scores.items()):
+    ranked_documents[i + 1] = [docno, score]
+    i = i + 1
+    if i == 50:
+        break
+print(ranked_documents)
+
+
         
     
 
