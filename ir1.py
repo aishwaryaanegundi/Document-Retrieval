@@ -7,6 +7,7 @@ import math
 import operator
 import numpy as np
 import collections
+from bs4 import BeautifulSoup as bs
 
 corpus = {}
 with open('trec_documents.xml', 'r') as f:   # Reading file
@@ -146,39 +147,90 @@ def vectorize_query(tokens):
     return vector
 
 # compute similarity scores
-query = "Who is the author of the book, The Iron Lady: A Biography of Margaret Thatcher?"
-query = str.lower(query)
-table = str.maketrans('', '', string.punctuation)
-query = query.translate(table)
+def get_top_n_relevant_doc(query, n):
+#query = "Who is the author of the book, The Iron Lady: A Biography of Margaret Thatcher?"
+    query = str.lower(query)
+    table = str.maketrans('', '', string.punctuation)
+    query = query.translate(table)
+    query_tokens = nltk.word_tokenize(query)
 
-query_tokens = nltk.word_tokenize(query)
+    query_vector = vectorize_query(query_tokens)
+    similarity_scores = {}
+    for docno, text in processed_corpus.items():
+        doc_vector = vectorize_doc(docno)
+        score = cosine_similarity(doc_vector, query_vector)
+        similarity_scores[docno] = score
 
-query_vector = vectorize_query(query_tokens)
-similarity_scores = {}
-for docno, text in processed_corpus.items():
-    doc_vector = vectorize_doc(docno)
-    score = cosine_similarity(doc_vector, query_vector)
-    similarity_scores[docno] = score
+    sorted_scores = sorted(similarity_scores.items(), key=lambda kv: kv[1])
+    sorted_similarity_scores = collections.OrderedDict(sorted_scores)
 
-sorted_scores = sorted(similarity_scores.items(), key=lambda kv: kv[1])
-sorted_similarity_scores = collections.OrderedDict(sorted_scores)
+    # return the top 50 relevant documents
+    ranked_documents = {}
+    i = 0
+    for docno, score in reversed(sorted_similarity_scores.items()):
+        ranked_documents[i + 1] = [docno, score]
+        i = i + 1
+        if i == n:
+            break
+    return ranked_documents
+#print(ranked_documents)
 
-# return the top 50 relevant documents
-ranked_documents = {}
-i = 0
-for docno, score in reversed(sorted_similarity_scores.items()):
-    ranked_documents[i + 1] = [docno, score]
+# Evaluation
+# Extraction of queries
+queries = []
+content = []
+with open("test_questions.txt", "r") as file:
+    content = file.readlines()
+    content = "".join(content)
+    bs_content = bs(content, "lxml")
+    result = bs_content.find_all('desc')
+    for query in bs_content.find_all('desc'):
+        queries.append((query.text).replace('Description:\n', ''))
+
+# Extraction of patterns
+patterns = {}
+with open("patterns.txt", "r") as file:
+    content = file.readlines()
+    for line in content:    
+        tokens = line.split(' ', 1)
+        if tokens[0] not in patterns:
+            key = tokens[0]
+            pattern = []
+            pattern.append(tokens[1].replace('\n', ''))
+            patterns[key] = pattern
+        else:  
+            (patterns[tokens[0]]).append(tokens[1].replace('\n', ''))
+
+#print(patterns)
+query_to_pattern_map = {}
+i = 1
+for query in queries:
+    query_to_pattern_map[query] = patterns[str(i)]
     i = i + 1
-    if i == 50:
-        break
-print(ranked_documents)
 
+# Check if the document is relevant
+def isRelevant(docno, query):
+    text = processed_corpus[docno]
+    query_patterns = query_to_pattern_map[query]
+    for pattern in query_patterns:
+        for token in text:
+            if re.match(pattern, token):
+                return True
+    return False
 
-        
+# Compute mean precision scores
+precision_sum = 0
+for query in query_to_pattern_map:
+    relevant_count = 0
+    retrieved_docs = get_top_n_relevant_doc(query, 50)
+    for rank, docno in retrieved_docs.items():
+        if isRelevant(docno[0], query):
+            relevant_count = relevant_count + 1
+    precision = relevant_count / 50.0
+    precision_sum = precision_sum + precision
+mean_precision = precision_sum/100.0
+print(mean_precision)        
     
-
-
-
 
 
 
