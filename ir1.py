@@ -148,7 +148,6 @@ def vectorize_query(tokens):
 
 # compute similarity scores
 def get_top_n_relevant_doc(query, n):
-#query = "Who is the author of the book, The Iron Lady: A Biography of Margaret Thatcher?"
     query = str.lower(query)
     table = str.maketrans('', '', string.punctuation)
     query = query.translate(table)
@@ -173,7 +172,7 @@ def get_top_n_relevant_doc(query, n):
         if i == n:
             break
     return ranked_documents
-#print(ranked_documents)
+
 
 # Evaluation
 # Extraction of queries
@@ -201,7 +200,7 @@ with open("patterns.txt", "r") as file:
         else:  
             (patterns[tokens[0]]).append(tokens[1].replace('\n', ''))
 
-#print(patterns)
+
 query_to_pattern_map = {}
 i = 1
 for query in queries:
@@ -214,31 +213,127 @@ def isRelevant(docno, query):
     query_patterns = query_to_pattern_map[query]
     for pattern in query_patterns:
         for token in text:
-            if re.match(pattern, token):
+            if re.match(pattern, token, flags = re.IGNORECASE):
                 return True
     return False
 
 # Compute mean precision scores
-precision_sum = 0
-for query in query_to_pattern_map:
-    relevant_count = 0
-    retrieved_docs = get_top_n_relevant_doc(query, 50)
-    for rank, docno in retrieved_docs.items():
-        if isRelevant(docno[0], query):
-            relevant_count = relevant_count + 1
-    precision = relevant_count / 50.0
-    precision_sum = precision_sum + precision
-mean_precision = precision_sum/100.0
-print(mean_precision)        
+#precision_sum = 0
+#for query in query_to_pattern_map:
+#    relevant_count = 0
+#    retrieved_docs = get_top_n_relevant_doc(query, 50)
+#    for rank, docno in retrieved_docs.items():
+#        if isRelevant(docno[0], query):
+#            print("relevant: ", docno[0], query)
+#            relevant_count = relevant_count + 1
+#    precision = relevant_count / 50.0
+#    print("precision for each query: ", query, precision)
+#    precision_sum = precision_sum + precision
+#mean_precision = precision_sum/100.0
+#print("baseline mean precision: ", mean_precision)        
     
 
+# Task 2
+# BM25
+# construct inverted index
+inverted_index = {}
+for docno, text in processed_corpus.items():
+    for word in text:
+        if word in inverted_index:
+            if docno in inverted_index[word]:
+                inverted_index[word][docno] += 1
+            else:
+                inverted_index[word][docno] = 1
+        else:
+            d = dict()
+            d[docno] = 1
+            inverted_index[word] = d
+
+# Compute document frequency
+def get_document_frequency(word, docno):
+    if word in inverted_index:
+        return inverted_index[word][docno]
+    else:
+        raise LookupError('%s not in index' % word)
+
+# construct document length table
+document_length = {}
+for docno, text in processed_corpus.items():
+    document_length[docno] = len(text)
+
+# compute average document length
+total_length = 0
+for docno, length in document_length.items():
+    total_length += length
+average_document_length = total_length / float(len(document_length))
+
+# compute bm25 score
+k1 = 1.2
+k2 = 100
+b = 0.75
+R = 0.0
 
 
+def score_BM25(n, f, qf, r, N, dl, avdl):
+	K = compute_K(dl, avdl)
+	first = math.log( ( (r + 0.5) / (R - r + 0.5) ) / ( (n - r + 0.5) / (N - n - R + r + 0.5)) )
+	second = ((k1 + 1) * f) / (K + f)
+	third = ((k2+1) * qf) / (k2 + qf)
+	return first * second * third
 
 
+def compute_K(dl, avdl):
+	return k1 * ((1-b) + b * (float(dl)/float(avdl)) )
 
+# get top 50 reranked relevant documents
+def get_top_n_reranked_relevant_docs(query, baseline_docs, n):
+    query = str.lower(query)
+    table = str.maketrans('', '', string.punctuation)
+    query = query.translate(table)
+    query_tokens = nltk.word_tokenize(query)
+    bm25_scores = {}
+    for qt in query_tokens:
+        if qt in inverted_index:
+            doc_dict = inverted_index[qt] 
+            for docno, freq in doc_dict.items():
+                if docno in baseline_docs:
+                    score = score_BM25(n=len(doc_dict), f = freq, qf = 1, r = 0, N = len(document_length),
+									       dl = document_length[docno], avdl = average_document_length)
+                    if docno in bm25_scores:
+                        bm25_scores[docno] += score
+                    else:
+                        bm25_scores[docno] = score
+    sorted_scores = sorted(bm25_scores.items(), key=lambda kv: kv[1])
+    sorted_bm25_scores = collections.OrderedDict(sorted_scores)
 
+    # return the top 50 relevant documents
+    ranked_documents = {}
+    i = 0
+    for docno, score in reversed(sorted_bm25_scores.items()):
+        ranked_documents[i + 1] = [docno, score]
+        i = i + 1
+        if i == n:
+            break
+    return ranked_documents
 
+# Compute mean precision scores
+precision_sum = 0
+for query in query_to_pattern_map:
+    baseline_retrieved_docs = []
+    baseline_rel_docs = get_top_n_relevant_doc(query, 1000)
+    for rank, doc in baseline_rel_docs.items():
+        baseline_retrieved_docs.append(doc[0])
+    relevant_count = 0
+    retrieved_docs = get_top_n_reranked_relevant_docs(query, baseline_retrieved_docs, 50)
+    for rank, docno in retrieved_docs.items():
+        if isRelevant(docno[0], query):
+#            print("relevant: ", docno[0], query)
+            relevant_count = relevant_count + 1
+    precision = relevant_count / 50.0
+    print("precision for each query: ", query, precision)
+    precision_sum = precision_sum + precision
+mean_precision = precision_sum/100.0
+print("BM25 mean precision: ", mean_precision)   
 
 
 
