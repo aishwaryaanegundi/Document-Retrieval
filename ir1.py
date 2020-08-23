@@ -24,7 +24,6 @@ for doc in root:
     text = ''
     if re.search("^LA", doc_no):
         text_element = doc.find('TEXT')
-        print(text_element.text)
         for p in doc.find('TEXT').findall('P'):
             text = text + (p.text)
     else:
@@ -39,9 +38,7 @@ for key, value in corpus.items():
     processed_corpus[key] = nltk.word_tokenize(value)
 
 #processed_corpus = dict(list(processed_corpus.items())[:int(len(processed_corpus)/2)])
-#processed_corpus = dict(list(processed_corpus.items())[:2000])
-#for key, value in processed_corpus. items():
-#    print(key, ' : ', value)
+#processed_corpus = dict(list(processed_corpus.items())[:1000])
 
 # computing the inverse document frequency
 N = len(processed_corpus)
@@ -53,7 +50,7 @@ for key, value in processed_corpus.items():
     for term in value:
         if term not in vocabulary:
             vocabulary.append(term)
-print("size of vocabulary: ", len(vocabulary))
+print("Size of vocabulary: ", len(vocabulary))
 for word in vocabulary:
     idf[word] = 0
 
@@ -118,7 +115,6 @@ def vectorize_doc(docno):
         index = indexed_vocabulary[token]
         tfidf = tf_idf[docno][token]
         vector[index] = tfidf
-#    print(np.nonzero(vector))
     return vector
 
 # vectorize query
@@ -144,7 +140,7 @@ def vectorize_query(tokens):
             tfidf = qtf[token]*idf[token]
             vector[index] = tfidf
         except KeyError:
-            print("token: ", token, " not found")
+            pass
     return vector
 
 # compute similarity scores
@@ -173,8 +169,6 @@ def get_top_n_relevant_doc(query, n):
         if i == n:
             break
     return ranked_documents
-
-
 
 # Evaluation
 # Extraction of queries
@@ -211,12 +205,11 @@ for query in queries:
 
 # Check if the document is relevant
 def isRelevant(docno, query):
-    text = processed_corpus[docno]
+    text = corpus[docno]
     query_patterns = query_to_pattern_map[query]
     for pattern in query_patterns:
-        for token in text:
-            if re.match(pattern, token, flags = re.IGNORECASE):
-                return True
+        if re.search(pattern, text, flags = re.IGNORECASE):
+            return True
     return False
 
 # Compute mean precision scores
@@ -224,16 +217,13 @@ precision_sum = 0
 for query in query_to_pattern_map:
     relevant_count = 0
     retrieved_docs = get_top_n_relevant_doc(query, 50)
-#    print("query: ", query, "retrieved dcuments: ", retrieved_docs)
     for rank, docno in retrieved_docs.items():
         if isRelevant(docno[0], query):
-#            print("relevant: ", docno[0], query)
             relevant_count = relevant_count + 1
     precision = relevant_count / 50.0
-#    print("precision for each query: ", query, precision)
     precision_sum = precision_sum + precision
 mean_precision = precision_sum/100.0
-print("baseline mean precision: ", mean_precision)        
+print("Baseline mean precision: ", mean_precision)        
     
 
 # Task 2
@@ -275,7 +265,6 @@ def compute_BM25_score(qt, docno):
         f_qi_d = frequencies[docno][qt]
         score = inverse_doc_freq * f_qi_d * (((k1+1)/(f_qi_d + (k1 * (1-b+(b * document_length[docno]/average_document_length))))) + 1)
     except KeyError:
-#        print('%s not in index' % qt)
         pass
     return score
 
@@ -315,22 +304,181 @@ for query in query_to_pattern_map:
     for rank, doc in baseline_rel_docs.items():
         baseline_retrieved_docs.append(doc[0])
     relevant_count = 0
-    retrieved_docs = get_top_n_reranked_relevant_docs(query, baseline_retrieved_docs, 50)
-    for rank, docno in retrieved_docs.items():
+    retrieved_bm25_docs = get_top_n_reranked_relevant_docs(query, baseline_retrieved_docs, 50)
+    for rank, docno in retrieved_bm25_docs.items():
         if isRelevant(docno[0], query):
-#            print("relevant: ", docno[0], query)
             relevant_count = relevant_count + 1
     precision = relevant_count / 50.0
-#    print("b precision for each query: ", query, precision)
     precision_sum = precision_sum + precision
 bm25_mean_precision = precision_sum/100.0
-print("Baseline mean precision: ", mean_precision)   
 print("BM25 mean precision: ", bm25_mean_precision)   
 
 
+# Task 3
+# Sentence ranking
+# construct sentence corpus
 
+#doc_to_sentence_map = {}
+#sentence_corpus = {}
+#sent_no = 0
+#for docno, text in corpus.items():
+#    sentences = sent_tokenize(text)
+#    for sentence in sentences:
+#        sentence_corpus[str(i)] = sentence
+#        if docno in doc_to_sentence_map:
+#            doc_to_sentence_map[docno].append(str(i))
+#        else:
+#            l = []
+#            l.append(str(i))
+#            doc_to_sentence_map[docno] = l
+#        i = i + 1
+#
+#processed_sent_corpus = {}
+#for sent_no, sentence in sentence_corpus.items():
+#    sentence = str.lower(sentence)
+#    table = str.maketrans('', '', string.punctuation)
+#    sentence = sentence.translate(table)
+#    processed_sent_corpus[sent_no] = nltk.word_tokenize(sentence)
+    
+# compute count of terms in each sentence
+#sentence_count = {}
+#for word in vocabulary:
+#    sentence_count[word] = 0
+#
+#for word in vocabulary:
+#    for key, value in processed_sent_corpus.items():
+#        if word in value:
+#            sentence_count[word] = sentence_count[word] + 1
+#
+# compute term frequencies
+#sentence_term_frequencies = {}
+#for sentno, sentence in processed_sent_corpus.items():
+#    tf = {}
+#    freq_count = {}
+#    words = []
+#    for word in sentence:
+#        if word not in words:
+#            words.append(word)
+#            freq_count[word] = 1
+#        else:
+#            freq_count[word] += 1
+#    for word in words:
+#        tf[word] = freq_count[word]
+#    sentence_term_frequencies[sentno] = tf
 
+# construct sentence length table
+#sentence_length = {}
+#for sentno, sentence in processed_sent_corpus.items():
+#    sentence_length[sentno] = len(sentence)
 
+# compute average sentence length
+#total_sent_length = 0
+#for sentno, length in document_length.items():
+#    total_sent_length += length
+#average_sentence_length = total_sent_length/float(len(processed_sent_corpus))
+
+# construct sentence count
+#sentence_count = {}
+#sentence_vocabulary = []
+#for sentno, sentence in processed_sent_corpus.items():
+#    for token in sentence:
+#        if token not in sentence_vocabulary:
+#            sentence_vocabulary.append(token)
+#
+#for word in sentence_vocabulary:
+#    for sentno, sentence in processed_sent_corpus.items():
+#        if word in sentence:
+#            if word not in sentence_count:
+#                sentence_count[word] = 1
+#            else:
+#                sentence_count[word] += 1
+#
+#def get_sentences_from_doc(docs):
+#    retrieved_sentences = []
+#    for rank, doc in docs.items():
+#        sentences = doc_to_sentence_map[doc[0]]
+#        retrieved_sentences.append(sentences)
+#    return retrieved_sentences
+#
+# compute bm25 score for sentences
+#def compute_sent_BM25_score(qt, sentno):
+#    score = 0
+#    try:
+#        inverse_doc_freq = math.log(((N - sentence_count[qt]+ 0.5)/(sentence_count[qt] + 0.5)) + 1)
+#        f_qi_d = sentence_term_frequencies[sentno][qt]
+#        score = inverse_doc_freq * f_qi_d * (((k1+1)/(f_qi_d + (k1 * (1-b+(b * sentence_length[sentno]/average_sentence_length))))) + 1)
+#    except KeyError:
+#        pass
+#    return score
+#
+# get top 50 relevant sentences
+#def get_top_n_relevant_sentences(query, bm25_sentences, n):
+#    query = str.lower(query)
+#    table = str.maketrans('', '', string.punctuation)
+#    query = query.translate(table)
+#    query_tokens = nltk.word_tokenize(query)
+#    sentence_scores = {}
+#    for qt in query_tokens:
+#        for sentno in bm25_sentences:
+#            score = compute_sent_BM25_score(qt, sentno)
+#            if sentno in sentence_scores:
+#                bm25_scores[sentno] += score
+#            else:
+#                bm25_scores[sentno] = score
+#    sorted_scores = sorted(sentence_scores.items(), key=lambda kv: kv[1])
+#    sorted_bm25_scores = collections.OrderedDict(sorted_scores)
+#
+#    # return the top 50 relevant sentences
+#    ranked_sentences = {}
+#    i = 0
+#    for sentno, score in reversed(sorted_bm25_scores.items()):
+#        ranked_sentences[i + 1] = [sentno, score]
+#        i = i + 1
+#        if i == n:
+#            break
+#    return ranked_sentences
+#
+# check if sentence is relevant
+#def isSentenceRelevant(sentno, query):
+#    text = processed_sent_corpus[sentno]
+#    text = sentence_corpus(sentno)
+#    query_patterns = query_to_pattern_map[query]
+#    for pattern in query_patterns:
+#        for token in text:
+#            if re.match(pattern, text, flags = re.IGNORECASE):
+#                return True
+#    return False
+#
+# compute MRR and mean precision scores
+#precision_sum = 0
+#query_relevent_ranks = {}
+#for query in query_to_pattern_map:
+#    baseline_retrieved_docs = []
+#    baseline_rel_docs = get_top_n_relevant_doc(query, 1000)
+#    for rank, doc in baseline_rel_docs.items():
+#        baseline_retrieved_docs.append(doc[0])
+#    relevant_count = 0
+#    retrieved_bm25_docs = get_top_n_reranked_relevant_docs(query, baseline_retrieved_docs, 50)
+#    retrieved_sentences = get_sentences_from_doc(retrieved_bm25_docs)
+#    ranked_sentences = get_top_n_relevant_sentences(query, retrieved_sentences, 50)
+#    for rank, sent in ranked_sentences.items():
+#        if isSentenceRelevant(sent[0], query):
+#            print("relevant: ", docno[0], query)
+#            relevant_count = relevant_count + 1
+#            if query not in query_relevent_ranks:
+#                query_relevent_ranks[query] = rank
+#            elif query_relevent_ranks[query] > rank:
+#                query_relevent_ranks[query] = rank                
+#    precision = relevant_count / 50.0
+#    precision_sum = precision_sum + precision
+#sentence_mean_precision = precision_sum/100.0
+#rank_sum = 0
+#for query, rank in query_relevent_ranks.items():
+#    rank_sum = rank_sum + (1.0/float(rank))
+#MRR = rank_sum / 100.0
+#print("Sentence mean precision: ", sentence_mean_precision) 
+#print("MRR: ", MRR)
+#
 
 
 
