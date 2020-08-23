@@ -8,6 +8,7 @@ import operator
 import numpy as np
 import collections
 from bs4 import BeautifulSoup as bs
+from nltk.tokenize import sent_tokenize
 
 corpus = {}
 with open('trec_documents.xml', 'r') as f:   # Reading file
@@ -38,7 +39,7 @@ for key, value in corpus.items():
     processed_corpus[key] = nltk.word_tokenize(value)
 
 #processed_corpus = dict(list(processed_corpus.items())[:int(len(processed_corpus)/2)])
-processed_corpus = dict(list(processed_corpus.items())[:1000])
+#processed_corpus = dict(list(processed_corpus.items())[:2000])
 #for key, value in processed_corpus. items():
 #    print(key, ' : ', value)
 
@@ -174,6 +175,7 @@ def get_top_n_relevant_doc(query, n):
     return ranked_documents
 
 
+
 # Evaluation
 # Extraction of queries
 queries = []
@@ -218,44 +220,39 @@ def isRelevant(docno, query):
     return False
 
 # Compute mean precision scores
-#precision_sum = 0
-#for query in query_to_pattern_map:
-#    relevant_count = 0
-#    retrieved_docs = get_top_n_relevant_doc(query, 50)
-#    for rank, docno in retrieved_docs.items():
-#        if isRelevant(docno[0], query):
+precision_sum = 0
+for query in query_to_pattern_map:
+    relevant_count = 0
+    retrieved_docs = get_top_n_relevant_doc(query, 50)
+#    print("query: ", query, "retrieved dcuments: ", retrieved_docs)
+    for rank, docno in retrieved_docs.items():
+        if isRelevant(docno[0], query):
 #            print("relevant: ", docno[0], query)
-#            relevant_count = relevant_count + 1
-#    precision = relevant_count / 50.0
+            relevant_count = relevant_count + 1
+    precision = relevant_count / 50.0
 #    print("precision for each query: ", query, precision)
-#    precision_sum = precision_sum + precision
-#mean_precision = precision_sum/100.0
-#print("baseline mean precision: ", mean_precision)        
+    precision_sum = precision_sum + precision
+mean_precision = precision_sum/100.0
+print("baseline mean precision: ", mean_precision)        
     
 
 # Task 2
 # BM25
-# construct inverted index
-inverted_index = {}
+# construct frequency count table
+frequencies = {}
 for docno, text in processed_corpus.items():
+    tf = {}
+    freq_count = {}
+    words = []
     for word in text:
-        if word in inverted_index:
-            if docno in inverted_index[word]:
-                inverted_index[word][docno] += 1
-            else:
-                inverted_index[word][docno] = 1
+        if word not in words:
+            words.append(word)
+            freq_count[word] = 1
         else:
-            d = dict()
-            d[docno] = 1
-            inverted_index[word] = d
-
-# Compute document frequency
-def get_document_frequency(word, docno):
-    if word in inverted_index:
-        return inverted_index[word][docno]
-    else:
-        raise LookupError('%s not in index' % word)
-
+            freq_count[word] += 1
+    for word in words:
+        tf[word] = freq_count[word]
+    frequencies[docno] = tf
 # construct document length table
 document_length = {}
 for docno, text in processed_corpus.items():
@@ -269,23 +266,21 @@ average_document_length = total_length / float(len(document_length))
 
 # compute bm25 score
 k1 = 1.2
-k2 = 100
 b = 0.75
-R = 0.0
+
+def compute_BM25_score(qt, docno):
+    score = 0
+    try:
+        inverse_doc_freq = math.log(((N - doc_count[qt]+ 0.5)/(doc_count[qt] + 0.5)) + 1)
+        f_qi_d = frequencies[docno][qt]
+        score = inverse_doc_freq * f_qi_d * (((k1+1)/(f_qi_d + (k1 * (1-b+(b * document_length[docno]/average_document_length))))) + 1)
+    except KeyError:
+#        print('%s not in index' % qt)
+        pass
+    return score
 
 
-def score_BM25(n, f, qf, r, N, dl, avdl):
-	K = compute_K(dl, avdl)
-	first = math.log( ( (r + 0.5) / (R - r + 0.5) ) / ( (n - r + 0.5) / (N - n - R + r + 0.5)) )
-	second = ((k1 + 1) * f) / (K + f)
-	third = ((k2+1) * qf) / (k2 + qf)
-	return first * second * third
 
-
-def compute_K(dl, avdl):
-	return k1 * ((1-b) + b * (float(dl)/float(avdl)) )
-
-# get top 50 reranked relevant documents
 def get_top_n_reranked_relevant_docs(query, baseline_docs, n):
     query = str.lower(query)
     table = str.maketrans('', '', string.punctuation)
@@ -293,28 +288,24 @@ def get_top_n_reranked_relevant_docs(query, baseline_docs, n):
     query_tokens = nltk.word_tokenize(query)
     bm25_scores = {}
     for qt in query_tokens:
-        if qt in inverted_index:
-            doc_dict = inverted_index[qt] 
-            for docno, freq in doc_dict.items():
-                if docno in baseline_docs:
-                    score = score_BM25(n=len(doc_dict), f = freq, qf = 1, r = 0, N = len(document_length),
-									       dl = document_length[docno], avdl = average_document_length)
-                    if docno in bm25_scores:
-                        bm25_scores[docno] += score
-                    else:
-                        bm25_scores[docno] = score
+        for docno in baseline_docs:
+            score = compute_BM25_score(qt, docno)
+            if docno in bm25_scores:
+                bm25_scores[docno] += score
+            else:
+                bm25_scores[docno] = score
     sorted_scores = sorted(bm25_scores.items(), key=lambda kv: kv[1])
     sorted_bm25_scores = collections.OrderedDict(sorted_scores)
 
     # return the top 50 relevant documents
-    ranked_documents = {}
+    ranked_bm25_documents = {}
     i = 0
     for docno, score in reversed(sorted_bm25_scores.items()):
-        ranked_documents[i + 1] = [docno, score]
+        ranked_bm25_documents[i + 1] = [docno, score]
         i = i + 1
         if i == n:
             break
-    return ranked_documents
+    return ranked_bm25_documents
 
 # Compute mean precision scores
 precision_sum = 0
@@ -330,29 +321,11 @@ for query in query_to_pattern_map:
 #            print("relevant: ", docno[0], query)
             relevant_count = relevant_count + 1
     precision = relevant_count / 50.0
-    print("precision for each query: ", query, precision)
+#    print("b precision for each query: ", query, precision)
     precision_sum = precision_sum + precision
-mean_precision = precision_sum/100.0
-print("BM25 mean precision: ", mean_precision)   
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+bm25_mean_precision = precision_sum/100.0
+print("Baseline mean precision: ", mean_precision)   
+print("BM25 mean precision: ", bm25_mean_precision)   
 
 
 
